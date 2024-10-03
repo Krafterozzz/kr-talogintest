@@ -34,7 +34,7 @@
             margin-top: 1rem;
             font-weight: bold;
         }
-        input {
+        input, select {
             padding: 0.5rem;
             margin-top: 0.5rem;
             border: 1px solid #ccc;
@@ -78,8 +78,10 @@
     <div class="container">
         <h1>KRÉTA Bejelentkezés</h1>
         <form id="login-form">
-            <label for="institute-code">Iskolai kód:</label>
-            <input type="text" id="institute-code" required>
+            <label for="institute-select">Iskola:</label>
+            <select id="institute-select" required>
+                <option value="">Válassz iskolát...</option>
+            </select>
             
             <label for="username">Felhasználónév:</label>
             <input type="text" id="username" required>
@@ -94,12 +96,52 @@
         <div id="timetable" style="display: none;">
             <h2>Órarend</h2>
             <table id="timetable-content"></table>
+            <button id="logout-button" style="display: none;">Kijelentkezés</button>
         </div>
     </div>
 
     <script>
         let accessToken = '';
         let refreshToken = '';
+        let globalApiUrl = '';
+        
+        async function getGlobalApiUrl() {
+            const response = await fetch('https://kretaglobalmobileapi2.ekreta.hu/api/v3/Institute');
+            if (!response.ok) {
+                throw new Error('Nem sikerült lekérni a globális API URL-t.');
+            }
+            const data = await response.json();
+            return data.GlobalMobileApiUrlPROD;
+        }
+        
+        async function getInstitutes() {
+            const response = await fetch(`${globalApiUrl}/api/v3/Institute`, {
+                headers: {
+                    'apiKey': '7856d350-1fda-45f5-822d-e1a2f3f1acf0'
+                }
+            });
+            if (!response.ok) {
+                throw new Error('Nem sikerült lekérni az iskolák listáját.');
+            }
+            return await response.json();
+        }
+        
+        async function populateInstituteSelect() {
+            try {
+                globalApiUrl = await getGlobalApiUrl();
+                const institutes = await getInstitutes();
+                const select = document.getElementById('institute-select');
+                institutes.forEach(institute => {
+                    const option = document.createElement('option');
+                    option.value = institute.instituteCode;
+                    option.textContent = `${institute.name} (${institute.city})`;
+                    select.appendChild(option);
+                });
+            } catch (error) {
+                console.error('Hiba:', error);
+                document.getElementById('error-message').textContent = error.message;
+            }
+        }
         
         async function getNonce() {
             const response = await fetch('https://idp.e-kreta.hu/nonce');
@@ -150,7 +192,7 @@
                     'Content-Type': 'application/x-www-form-urlencoded'
                 },
                 body: new URLSearchParams({
-                    institute_code: document.getElementById('institute-code').value,
+                    institute_code: document.getElementById('institute-select').value,
                     refresh_token: refreshToken,
                     grant_type: 'refresh_token',
                     client_id: 'kreta-ellenorzo-mobile-android'
@@ -166,12 +208,36 @@
             refreshToken = data.refresh_token;
         }
         
+        async function logout() {
+            const response = await fetch('https://idp.e-kreta.hu/connect/revocation', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded'
+                },
+                body: new URLSearchParams({
+                    token: refreshToken,
+                    client_id: 'kreta-ellenorzo-mobile-android'
+                })
+            });
+            
+            if (!response.ok) {
+                throw new Error('Hiba történt a kijelentkezés során.');
+            }
+            
+            accessToken = '';
+            refreshToken = '';
+            document.getElementById('timetable').style.display = 'none';
+            document.getElementById('login-form').style.display = 'block';
+            document.getElementById('logout-button').style.display = 'none';
+        }
+        
         async function getTimetable() {
             const today = new Date();
             const fromDate = today.toISOString().split('T')[0];
             const toDate = new Date(today.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
             
-            const response = await fetch(`https://${document.getElementById('institute-code').value}.e-kreta.hu/mapi/api/v1/Lesson?fromDate=${fromDate}&toDate=${toDate}`, {
+            const instituteCode = document.getElementById('institute-select').value;
+            const response = await fetch(`https://${instituteCode}.e-kreta.hu/ellenorzo/V3/Sajat/OrarendElemek?datumTol=${fromDate}&datumIg=${toDate}`, {
                 headers: {
                     'Authorization': `Bearer ${accessToken}`
                 }
@@ -203,21 +269,25 @@
             
             timetable.forEach(lesson => {
                 const row = table.insertRow();
-                row.insertCell().textContent = new Date(lesson.Date).toLocaleDateString('hu-HU');
-                row.insertCell().textContent = new Date(lesson.StartTime).toLocaleTimeString('hu-HU', {hour: '2-digit', minute:'2-digit'});
-                row.insertCell().textContent = new Date(lesson.EndTime).toLocaleTimeString('hu-HU', {hour: '2-digit', minute:'2-digit'});
-                row.insertCell().textContent = lesson.Subject;
-                row.insertCell().textContent = lesson.Teacher;
-                row.insertCell().textContent = lesson.ClassRoom;
+                row.insertCell().textContent = new Date(lesson.Datum).toLocaleDateString('hu-HU');
+                row.insertCell().textContent = new Date(lesson.KezdetIdopont).toLocaleTimeString('hu-HU', {hour: '2-digit', minute:'2-digit'});
+                row.insertCell().textContent = new Date(lesson.VegIdopont).toLocaleTimeString('hu-HU', {hour: '2-digit', minute:'2-digit'});
+                row.insertCell().textContent = lesson.Tantargy.Nev;
+                row.insertCell().textContent = lesson.TanarNeve;
+                row.insertCell().textContent = lesson.TeremNeve;
             });
             
             document.getElementById('timetable').style.display = 'block';
+            document.getElementById('login-form').style.display = 'none';
+            document.getElementById('logout-button').style.display = 'block';
         }
+        
+        document.addEventListener('DOMContentLoaded', populateInstituteSelect);
         
         document.getElementById('login-form').addEventListener('submit', async function(e) {
             e.preventDefault();
             
-            const instituteCode = document.getElementById('institute-code').value;
+            const instituteCode = document.getElementById('institute-select').value;
             const username = document.getElementById('username').value;
             const password = document.getElementById('password').value;
             
@@ -225,6 +295,18 @@
                 await login(instituteCode, username, password);
                 const timetable = await getTimetable();
                 displayTimetable(timetable);
+            } catch (error) {
+                console.error('Hiba:', error);
+                document.getElementById('error-message').textContent = error.message;
+            }
+        });
+        
+        document.getElementById('logout-button').addEventListener('click', async function(e) {
+            e.preventDefault();
+            
+            try {
+                await logout();
+                document.getElementById('error-message').textContent = 'Sikeresen kijelentkezett.';
             } catch (error) {
                 console.error('Hiba:', error);
                 document.getElementById('error-message').textContent = error.message;
