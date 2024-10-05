@@ -1,25 +1,114 @@
 <!DOCTYPE html>
-<html lang="hu">
+<html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>KRÉTA Bejelentkezés</title>
-    <link rel="stylesheet" href="style.css">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Kreta OAuth Login</title>
+  <script>
+    // Function to open the Kreta login page
+    function loginWithKreta() {
+      const clientId = 'kreta-ellenorzo-student-mobile-ios';
+      const redirectUri = 'https://mobil.e-kreta.hu/ellenorzo-student/prod/oauthredirect';
+      const codeChallenge = 'HByZRRnPGb-Ko_wTI7ibIba1HQ6lor0ws4bcgReuYSQ';
+      const scope = 'openid email offline_access kreta-ellenorzo-webapi.public kreta-eugyintezes-webapi.public kreta-fileservice-webapi.public kreta-mobile-global-webapi.public kreta-dkt-webapi.public kreta-ier-webapi.public';
+      
+      const kretaLoginUrl = `https://idp.e-kreta.hu/connect/authorize?prompt=login&nonce=wylCrqT4oN6PPgQn2yQB0euKei9nJeZ6_ffJ-VpSKZU&response_type=code&code_challenge_method=S256&scope=${encodeURIComponent(scope)}&code_challenge=${codeChallenge}&redirect_uri=${encodeURIComponent(redirectUri)}&client_id=${clientId}`;
+      
+      // Open Kreta login in a new window
+      window.open(kretaLoginUrl, '_blank', 'width=600,height=700');
+    }
+
+    // Function to extract the code from URL (after OAuth redirect)
+    function extractCodeFromUrl(url) {
+      const params = new URLSearchParams(url.split('?')[1]);
+      return params.get('code');
+    }
+
+    // Function to fetch access token using authorization code
+    async function fetchAccessToken(authCode) {
+      const tokenUrl = 'https://idp.e-kreta.hu/connect/token';
+      const clientId = 'kreta-ellenorzo-student-mobile-ios';
+      const redirectUri = 'https://mobil.e-kreta.hu/ellenorzo-student/prod/oauthredirect';
+      const codeVerifier = 'YOUR_CODE_VERIFIER'; // This should match the code_verifier used in the code challenge
+
+      const data = new URLSearchParams();
+      data.append('grant_type', 'authorization_code');
+      data.append('code', authCode);
+      data.append('redirect_uri', redirectUri);
+      data.append('client_id', clientId);
+      data.append('code_verifier', codeVerifier);
+
+      const response = await fetch(tokenUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: data,
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        const accessToken = result.access_token;
+        console.log('Access Token:', accessToken);
+
+        // Now, fetch the timetable using the access token
+        fetchTimetable(accessToken);
+      } else {
+        console.error('Failed to fetch access token');
+      }
+    }
+
+    // Function to fetch timetable from Kreta API
+    async function fetchTimetable(accessToken) {
+      const timetableUrl = 'https://your_institute_code.e-kreta.hu/ellenorzo/v3/sajat/OrarendElem?datumTol=2024-10-05&datumIg=2024-10-12';
+      
+      const response = await fetch(timetableUrl, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'apiKey': 'your_api_key',
+        },
+      });
+
+      if (response.ok) {
+        const timetableData = await response.json();
+        console.log('Timetable:', timetableData);
+        displayTimetable(timetableData);
+      } else {
+        console.error('Failed to fetch timetable');
+      }
+    }
+
+    // Function to display timetable data on the page
+    function displayTimetable(timetableData) {
+      const timetableDiv = document.getElementById('timetable');
+      timetableDiv.innerHTML = '<h2>Your Timetable</h2>';
+      
+      timetableData.forEach(item => {
+        timetableDiv.innerHTML += `<p>${item.subjectName} - ${item.startTime} to ${item.endTime}</p>`;
+      });
+    }
+
+    // Function to handle the redirect (when the user is redirected after login)
+    window.addEventListener('message', (event) => {
+      if (event.origin === 'https://mobil.e-kreta.hu' && event.data) {
+        const code = extractCodeFromUrl(event.data);
+        if (code) {
+          fetchAccessToken(code); // Fetch access token using the authorization code
+        }
+      }
+    });
+  </script>
 </head>
 <body>
-    <div class="login-container">
-        <h2>KRÉTA Bejelentkezés</h2>
-        <form id="login-form">
-            <label for="username">Felhasználónév:</label>
-            <input type="text" id="username" name="username" required>
-            <label for="password">Jelszó:</label>
-            <input type="password" id="password" name="password" required>
-            <label for="klik">KLIK kód:</label>
-            <input type="text" id="klik" name="klik" required>
-            <button type="submit">Bejelentkezés</button>
-        </form>
-        <div id="message"></div>
-    </div>
-    <script src="script.js"></script>
+
+  <h1>Kreta OAuth Login Example</h1>
+  
+  <!-- Button to initiate login -->
+  <button onclick="loginWithKreta()">Login with Kreta</button>
+  
+  <!-- Section to display timetable -->
+  <div id="timetable"></div>
+
 </body>
 </html>
