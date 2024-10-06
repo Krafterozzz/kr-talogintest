@@ -1,5 +1,5 @@
 // Kréta login URL
-const loginUrl = 'https://idp.e-kreta.hu/connect/authorize?prompt=login&nonce=wylCrqT4oN6PPgQn2yQB0euKei9nJeZ6_ffJ-VpSKZU&response_type=code&code_challenge_method=S256&scope=openid%20email%20offline_access%20kreta-ellenorzo-webapi.public%20kreta-eugyintezes-webapi.public%20kreta-fileservice-webapi.public%20kreta-mobile-global-webapi.public%20kreta-dkt-webapi.public%20kreta-ier-webapi.public&code_challenge=HByZRRnPGb-Ko_wTI7ibIba1HQ6lor0ws4bcgReuYSQ&redirect_uri=https://mobil.e-kreta.hu/ellenorzo-student/prod/oauthredirect&client_id=kreta-ellenorzo-student-mobile-ios&state=refilc_student_mobile';
+const loginUrl = 'https://idp.e-kreta.hu/connect/authorize?prompt=login&response_type=code&code_challenge_method=S256&scope=openid%20email%20offline_access%20kreta-ellenorzo-webapi.public%20kreta-eugyintezes-webapi.public%20kreta-fileservice-webapi.public%20kreta-mobile-global-webapi.public%20kreta-dkt-webapi.public%20kreta-ier-webapi.public&redirect_uri=https://mobil.e-kreta.hu/ellenorzo-student/prod/oauthredirect&client_id=kreta-ellenorzo-student-mobile-ios';
 
 // Token kérés URL
 const tokenUrl = 'https://idp.e-kreta.hu/connect/token';
@@ -24,9 +24,15 @@ let checkPopupInterval = null;
 // Event listener a login gombhoz
 loginBtn.addEventListener('click', startLoginProcess);
 
-function startLoginProcess() {
+async function startLoginProcess() {
+    const nonce = await generateSecureNonce();
+    const codeVerifier = generateCodeVerifier();
+    const codeChallenge = await generateCodeChallenge(codeVerifier);
+    
+    const fullLoginUrl = `${loginUrl}&nonce=${nonce}&code_challenge=${codeChallenge}&state=refilc_student_mobile`;
+    
     // Új ablak megnyitása a login URL-lel
-    loginWindow = window.open(loginUrl, 'KretaLogin', 'width=600,height=700');
+    loginWindow = window.open(fullLoginUrl, 'KretaLogin', 'width=600,height=700');
     
     // Státusz frissítése
     updateStatus('Bejelentkezés folyamatban...', 'pending');
@@ -40,6 +46,9 @@ function startLoginProcess() {
 
     // Intervallum beállítása a popup ellenőrzéséhez
     checkPopupInterval = setInterval(checkPopupStatus, 1000); // 1 másodpercenként ellenőrizzük
+
+    // Code verifier tárolása
+    localStorage.setItem('codeVerifier', codeVerifier);
 }
 
 function checkPopupStatus() {
@@ -73,24 +82,40 @@ function handleLoginMessage(event) {
 
 // Tokenek beszerzése
 async function getTokens(code) {
-    const headers = {
-        'Content-Type': 'application/x-www-form-urlencoded',
-        'AuthorizationPolicy-nonce': await generateSecureNonce(),
-        'AuthorizationPolicy-key': 'v3',
-        'AuthorizationPolicy-version': 'v1'
-    };
-    const body = new URLSearchParams({
-        'grant_type': 'authorization_code',
-        'code': code,
-        'client_id': 'kreta-ellenorzo-student-mobile-ios',
-        'redirect_uri': 'https://mobil.e-kreta.hu/ellenorzo-student/prod/oauthredirect'
-    });
+    const codeVerifier = localStorage.getItem('codeVerifier');
+    if (!codeVerifier) {
+        console.error('Code verifier not found');
+        updateStatus('Hiba történt a bejelentkezés során.', 'error');
+        return;
+    }
+
+    const username = 'FELHASZNALO'; // A KRÉTA felhasználónév
+    const instituteCode = 'SUPPORT-FARKAS'; // Iskolánk kódja
+    const nonce = await generateSecureNonce();
+    const hmacKey = 'baSsxOwlU1jM'; // HMAC kulcs
+
+    // HMAC SHA512 generálása
+    const hmacSignature = await generateHMAC(instituteCode, nonce, username, hmacKey);
+    
+    const params = new URLSearchParams();
+    params.append('grant_type', 'authorization_code');
+    params.append('client_id', 'kreta-ellenorzo-student-mobile-ios');
+    params.append('code', code);
+    params.append('code_verifier', codeVerifier); // Kódellenőr hozzáadása
+    params.append('redirect_uri', 'https://mobil.e-kreta.hu/ellenorzo-student/prod/oauthredirect'); // Redirect URI
+    params.append('nonce', nonce); // Nonce
+    params.append('hmac', hmacSignature); // A HMAC aláírás hozzáadása
 
     try {
         const response = await fetch(tokenUrl, {
             method: 'POST',
-            headers: headers,
-            body: body
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'X-Authorizationpolicy-Key': 'GENERATED_KEY', // Opció szerint
+                'X-Authorizationpolicy-Version': 'v2', // Opció szerint
+                'X-Authorizationpolicy-Nonce': nonce // Opció szerint
+            },
+            body: params
         });
 
         if (response.ok) {
@@ -101,6 +126,9 @@ async function getTokens(code) {
             // Token tárolása Local Storage-ben
             localStorage.setItem('accessToken', data.access_token);
             localStorage.setItem('refreshToken', data.refresh_token);
+            
+            // Code verifier törlése
+            localStorage.removeItem('codeVerifier');
             
             // Sikeres bejelentkezés jelzése
             updateStatus('Sikeres bejelentkezés!', 'success');
@@ -116,6 +144,21 @@ async function getTokens(code) {
     }
 }
 
+// HMAC SHA512 generálása
+async function generateHMAC(instituteCode, nonce, username, key) {
+    const encoder = new TextEncoder();
+    const keyData = encoder.encode(key);
+    const message = `${instituteCode}${nonce}${username}`; // Az aláírandó üzenet
+    const messageData = encoder.encode(message);
+
+    // HMAC SHA512 generálása
+    const cryptoKey = await crypto.subtle.importKey('raw', keyData, { name: 'HMAC', hash: 'SHA-512' }, false, ['sign']);
+    const signature = await crypto.subtle.sign('HMAC', cryptoKey, messageData);
+    
+    // BASE64 kódolás
+    return btoa(String.fromCharCode(...new Uint8Array(signature)));
+}
+
 // Státusz frissítése
 function updateStatus(message, status) {
     statusDiv.textContent = message;
@@ -124,22 +167,38 @@ function updateStatus(message, status) {
 
 // Biztonságos nonce generálása
 async function generateSecureNonce() {
-    const rawNonce = generateRandomNonce();
+    const rawNonce = generateRandomString(32);
     const encoder = new TextEncoder();
     const data = encoder.encode(rawNonce);
-    const hashBuffer = await crypto.subtle.digest('SHA-512', data);
-    const key = '5Kmpmgd5fJ';
-    const keyData = encoder.encode(key);
-    const combinedBuffer = new Uint8Array(hashBuffer.byteLength + keyData.byteLength);
-    combinedBuffer.set(new Uint8Array(hashBuffer), 0);
-    combinedBuffer.set(keyData, hashBuffer.byteLength);
-    
-    return btoa(String.fromCharCode.apply(null, combinedBuffer));
+    const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
-// Véletlenszerű nonce generálása
-function generateRandomNonce() {
-    return Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+// Code verifier generálása
+function generateCodeVerifier() {
+    return generateRandomString(128);
+}
+
+// Code challenge generálása
+async function generateCodeChallenge(verifier) {
+    const encoder = new TextEncoder();
+    const data = encoder.encode(verifier);
+    const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+    return btoa(String.fromCharCode.apply(null, new Uint8Array(hashBuffer)))
+        .replace(/\+/g, '-')
+        .replace(/\//g, '_')
+        .replace(/=+$/, '');
+}
+
+// Véletlenszerű string generálása
+function generateRandomString(length) {
+    const possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~';
+    let text = '';
+    for (let i = 0; i < length; i++) {
+        text += possible.charAt(Math.floor(Math.random() * possible.length));
+    }
+    return text;
 }
 
 // CSS a státusz div-hez
