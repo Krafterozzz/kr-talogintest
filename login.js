@@ -75,7 +75,7 @@ function handleLoginMessage(event) {
             clearInterval(checkPopupInterval);
         }
     } else {
-        console.log("A KURVA ISTEN BASSZA MEG") // looool nem jelzi a konzolba (miert?)
+        console.log("hihihaha") // looool nem jelzi a konzolba (miert?), ez a function egy teszt jelleg
     }
 }
 
@@ -88,10 +88,17 @@ async function getTokens(code) {
         return;
     }
 
-    const username = '72865338806'; // A KRÉTA felhasználónév
+    const username = '72865338806'; // A kreten' felhasználónév
     const instituteCode = 'mszc-kando'; // Iskolánk kódja
     const nonce = await generateSecureNonce();
-    const hmacKey = 'baSsxOwlU1jM'; // HMAC kulcs
+    const hmacKey = 'baSsxOwlU1jM'; // HMAC kulcs idk 
+
+
+    //utasitas amit kaptam egy refilc fejelsztotol:
+    //felhasználónév minden kicsi + iskola kódja minden kicsi + generált nonce
+    //Ez lehashelve SHA512-vel
+    //A kulcs 5Kmpmgd5fJ
+    //Alakítsd át a kapott bájtokat Base64-re
 
   
     const hmacSignature = await generateHMAC(instituteCode, nonce, username, hmacKey);
@@ -110,7 +117,7 @@ async function getTokens(code) {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/x-www-form-urlencoded',
-                'X-Authorizationpolicy-Key': '// Mit kene ide irni ', 
+                'X-Authorizationpolicy-Key': ' Mit kene ide irni ', 
                 'X-Authorizationpolicy-Version': 'v3', 
                 'X-Authorizationpolicy-Nonce': nonce
             },
@@ -146,7 +153,7 @@ async function getTokens(code) {
 async function generateHMAC(instituteCode, nonce, username, key) {
     const encoder = new TextEncoder();
     const keyData = encoder.encode(key);
-    const message = `${instituteCode}${nonce}${username}`; // Az aláírandó üzenet
+    const message = `${instituteCode}${nonce}${username}`; 
     const messageData = encoder.encode(message);
 
   
