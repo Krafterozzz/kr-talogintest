@@ -231,4 +231,3 @@ style.textContent = `
 document.head.appendChild(style);
 
 
-// megfogom magam ölni miezaszar
