@@ -1,27 +1,24 @@
-// Kréta login URL
+
 const loginUrl = 'https://idp.e-kreta.hu/connect/authorize?prompt=login&response_type=code&code_challenge_method=S256&scope=openid%20email%20offline_access%20kreta-ellenorzo-webapi.public%20kreta-eugyintezes-webapi.public%20kreta-fileservice-webapi.public%20kreta-mobile-global-webapi.public%20kreta-dkt-webapi.public%20kreta-ier-webapi.public&redirect_uri=https://mobil.e-kreta.hu/ellenorzo-student/prod/oauthredirect&client_id=kreta-ellenorzo-student-mobile-ios';
 
-// Token kérés URL
+
 const tokenUrl = 'https://idp.e-kreta.hu/connect/token';
 
-// Login gomb
 const loginBtn = document.getElementById('loginBtn');
 
-// Státusz div a visszajelzéshez
 const statusDiv = document.createElement('div');
 statusDiv.id = 'loginStatus';
 document.body.appendChild(statusDiv);
 
-// Popup ablak referencia
 let loginWindow = null;
 
-// Időzítő a bejelentkezés ellenőrzéséhez
+
 let loginTimer = null;
 
-// Intervallum a popup ellenőrzéséhez
+
 let checkPopupInterval = null;
 
-// Event listener a login gombhoz
+
 loginBtn.addEventListener('click', startLoginProcess);
 
 async function startLoginProcess() {
@@ -31,23 +28,23 @@ async function startLoginProcess() {
     
     const fullLoginUrl = `${loginUrl}&nonce=${nonce}&code_challenge=${codeChallenge}&state=refilc_student_mobile`;
     
-    // Új ablak megnyitása a login URL-lel
+  
     loginWindow = window.open(fullLoginUrl, 'KretaLogin', 'width=600,height=700');
     
-    // Státusz frissítése
+  
     updateStatus('Bejelentkezés folyamatban...', 'pending');
     
-    // Időzítő indítása a bejelentkezés ellenőrzéséhez
+    
     loginTimer = setTimeout(() => {
         updateStatus('Sikertelen bejelentkezés. Kérjük, próbálja újra.', 'error');
         if (loginWindow) loginWindow.close();
         clearInterval(checkPopupInterval);
     }, 120000); // 2 perc várakozás
 
-    // Intervallum beállítása a popup ellenőrzéséhez
-    checkPopupInterval = setInterval(checkPopupStatus, 1000); // 1 másodpercenként ellenőrizzük
+   
+    checkPopupInterval = setInterval(checkPopupStatus, 1000); // 1 másodpercenként ellenőrzi
 
-    // Code verifier tárolása
+
     localStorage.setItem('codeVerifier', codeVerifier);
 }
 
@@ -61,12 +58,12 @@ function checkPopupStatus() {
     }
 }
 
-// Event listener az üzenetekhez
+
 window.addEventListener('message', handleLoginMessage);
 
-// Login üzenet kezelése
+
 function handleLoginMessage(event) {
-    // Ellenőrizzük, hogy az üzenet a várt formátumú-e
+ 
     if (event.data && typeof event.data === 'string' && event.data.startsWith('https://')) {
         const url = new URL(event.data);
         const code = url.searchParams.get('code');
@@ -77,6 +74,8 @@ function handleLoginMessage(event) {
             clearTimeout(loginTimer);
             clearInterval(checkPopupInterval);
         }
+    } else {
+        console.log("A KURVA ISTEN BASSZA MEG") // looool nem jelzi a konzolba (miert?)
     }
 }
 
@@ -89,31 +88,31 @@ async function getTokens(code) {
         return;
     }
 
-    const username = 'FELHASZNALO'; // A KRÉTA felhasználónév
-    const instituteCode = 'SUPPORT-FARKAS'; // Iskolánk kódja
+    const username = '72865338806'; // A KRÉTA felhasználónév
+    const instituteCode = 'mszc-kando'; // Iskolánk kódja
     const nonce = await generateSecureNonce();
     const hmacKey = 'baSsxOwlU1jM'; // HMAC kulcs
 
-    // HMAC SHA512 generálása
+  
     const hmacSignature = await generateHMAC(instituteCode, nonce, username, hmacKey);
     
     const params = new URLSearchParams();
     params.append('grant_type', 'authorization_code');
     params.append('client_id', 'kreta-ellenorzo-student-mobile-ios');
     params.append('code', code);
-    params.append('code_verifier', codeVerifier); // Kódellenőr hozzáadása
+    params.append('code_verifier', codeVerifier); 
     params.append('redirect_uri', 'https://mobil.e-kreta.hu/ellenorzo-student/prod/oauthredirect'); // Redirect URI
-    params.append('nonce', nonce); // Nonce
-    params.append('hmac', hmacSignature); // A HMAC aláírás hozzáadása
+    params.append('nonce', nonce); 
+    params.append('hmac', hmacSignature); 
 
     try {
         const response = await fetch(tokenUrl, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/x-www-form-urlencoded',
-                'X-Authorizationpolicy-Key': 'GENERATED_KEY', // Opció szerint
-                'X-Authorizationpolicy-Version': 'v2', // Opció szerint
-                'X-Authorizationpolicy-Nonce': nonce // Opció szerint
+                'X-Authorizationpolicy-Key': '// Mit kene ide irni ', 
+                'X-Authorizationpolicy-Version': 'v3', 
+                'X-Authorizationpolicy-Nonce': nonce
             },
             body: params
         });
@@ -123,14 +122,13 @@ async function getTokens(code) {
             console.log('Access Token:', data.access_token);
             console.log('Refresh Token:', data.refresh_token);
             
-            // Token tárolása Local Storage-ben
+       
             localStorage.setItem('accessToken', data.access_token);
             localStorage.setItem('refreshToken', data.refresh_token);
-            
-            // Code verifier törlése
+          
             localStorage.removeItem('codeVerifier');
             
-            // Sikeres bejelentkezés jelzése
+          
             updateStatus('Sikeres bejelentkezés!', 'success');
         } else {
             const errorData = await response.json();
@@ -144,28 +142,28 @@ async function getTokens(code) {
     }
 }
 
-// HMAC SHA512 generálása
+
 async function generateHMAC(instituteCode, nonce, username, key) {
     const encoder = new TextEncoder();
     const keyData = encoder.encode(key);
     const message = `${instituteCode}${nonce}${username}`; // Az aláírandó üzenet
     const messageData = encoder.encode(message);
 
-    // HMAC SHA512 generálása
+  
     const cryptoKey = await crypto.subtle.importKey('raw', keyData, { name: 'HMAC', hash: 'SHA-512' }, false, ['sign']);
     const signature = await crypto.subtle.sign('HMAC', cryptoKey, messageData);
     
-    // BASE64 kódolás
+  
     return btoa(String.fromCharCode(...new Uint8Array(signature)));
 }
 
-// Státusz frissítése
+
 function updateStatus(message, status) {
     statusDiv.textContent = message;
     statusDiv.className = status;
 }
 
-// Biztonságos nonce generálása
+
 async function generateSecureNonce() {
     const rawNonce = generateRandomString(32);
     const encoder = new TextEncoder();
@@ -175,12 +173,12 @@ async function generateSecureNonce() {
     return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
-// Code verifier generálása
+
 function generateCodeVerifier() {
     return generateRandomString(128);
 }
 
-// Code challenge generálása
+
 async function generateCodeChallenge(verifier) {
     const encoder = new TextEncoder();
     const data = encoder.encode(verifier);
@@ -191,7 +189,7 @@ async function generateCodeChallenge(verifier) {
         .replace(/=+$/, '');
 }
 
-// Véletlenszerű string generálása
+
 function generateRandomString(length) {
     const possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~';
     let text = '';
@@ -201,7 +199,7 @@ function generateRandomString(length) {
     return text;
 }
 
-// CSS a státusz div-hez
+
 const style = document.createElement('style');
 style.textContent = `
     #loginStatus {
@@ -224,3 +222,6 @@ style.textContent = `
     }
 `;
 document.head.appendChild(style);
+
+
+// megfogom magam ölni 
