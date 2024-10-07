@@ -231,4 +231,4 @@ style.textContent = `
 document.head.appendChild(style);
 
 
-// megfogom magam ölni 
+// megfogom magam ölni miezaszar
