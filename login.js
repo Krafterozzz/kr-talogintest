@@ -117,9 +117,11 @@ async function getTokens(code) {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/x-www-form-urlencoded',
-                'X-Authorizationpolicy-Key': ' Mit kene ide irni ', 
+                'User-Agent': 'hu.ekreta.student/1.0.5/Android/0/0',   //de jo lett volna ha mukodik.. Sadgers
+                'X-Authorizationpolicy-Key': '5Kmpmgd5fJ', 
                 'X-Authorizationpolicy-Version': 'v3', 
                 'X-Authorizationpolicy-Nonce': nonce
+                
             },
             body: params
         });
@@ -231,3 +233,4 @@ style.textContent = `
 document.head.appendChild(style);
 
 
+// megfogom magam ölni 
